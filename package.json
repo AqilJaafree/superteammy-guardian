@@ -1,0 +1,17 @@
+{
+  "name": "superteammy-guardian",
+  "version": "1.0.0",
+  "description": "Telegram onboarding bot for Superteam Malaysia",
+  "main": "src/bot.js",
+  "scripts": {
+    "start": "node src/bot.js",
+    "dev": "node -r dotenv/config src/bot.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "telegraf": "^4.16.0"
+  },
+  "devDependencies": {
+    "dotenv": "^16.0.0"
+  }
+}

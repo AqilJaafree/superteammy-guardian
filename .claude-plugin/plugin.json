@@ -1,0 +1,68 @@
+{
+    "name": "aqil-claude-code",
+  "version": "1.0.0",
+  "description": "Aqil's personal Claude Code setup with 14 productivity commands and 12 specialized AI agents for modern web development",
+  "author": {
+    "name": "Aqil"
+  },
+  "license": "MIT",
+  "keywords": [
+    "productivity",
+    "nextjs",
+    "supabase",
+    "typescript",
+    "react",
+    "api",
+    "development",
+    "mcp"
+  ],
+  "commands": [
+    "./.claude/commands/new-task.md",
+    "./.claude/commands/misc/code-explain.md",
+    "./.claude/commands/misc/code-optimize.md",
+    "./.claude/commands/misc/code-cleanup.md",
+    "./.claude/commands/misc/feature-plan.md",
+    "./.claude/commands/misc/lint.md",
+    "./.claude/commands/misc/docs-generate.md",
+    "./.claude/commands/api/api-new.md",
+    "./.claude/commands/api/api-test.md",
+    "./.claude/commands/api/api-protect.md",
+    "./.claude/commands/ui/component-new.md",
+    "./.claude/commands/ui/page-new.md",
+    "./.claude/commands/supabase/types-gen.md",
+    "./.claude/commands/supabase/edge-function-new.md"
+  ],
+  "agents": [
+    "./.claude/agents/tech-stack-researcher.md",
+    "./.claude/agents/backend-architect.md",
+    "./.claude/agents/deep-research-agent.md",
+    "./.claude/agents/frontend-architect.md",
+    "./.claude/agents/learning-guide.md",
+    "./.claude/agents/performance-engineer.md",
+    "./.claude/agents/refactoring-expert.md",
+    "./.claude/agents/requirements-analyst.md",
+    "./.claude/agents/security-engineer.md",
+    "./.claude/agents/system-architect.md",
+    "./.claude/agents/technical-writer.md",
+    "./.claude/agents/solana-blockchain-architect",
+    "./.claude/agents/mcp-server-developer",
+    "./.claude/agents/x402-solana-developer"
+  ],
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"],
+      "description": "Access up-to-date documentation for any library"
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest"],
+      "description": "Browser automation and web testing capabilities"
+    },
+    "supabase": {
+      "command": "npx",
+      "args": ["-y", "@supabase/mcp-server-supabase"],
+      "description": "Supabase database operations and management"
+    }
+  }
+}
