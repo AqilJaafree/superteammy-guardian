@@ -42,6 +42,14 @@ Or with Docker:
 docker compose up -d
 ```
 
+### Running Tests
+
+```bash
+npm test                 # run all tests
+npm run test:watch       # watch mode
+npm run test:coverage    # with coverage report
+```
+
 ### 4. Register Your Chats
 
 1. Add the bot as **admin** to your main group (needs "Delete Messages" permission)
@@ -89,13 +97,26 @@ Prefers false positives over false negatives — a borderline intro is better th
 ```
 src/
   bot.js                 # Entry point — wiring and launch
-  config.js              # Constants, message templates, admin check
-  db.js                  # SQLite database (better-sqlite3)
+  config.js              # Constants, message templates, chat ID state
+  db.js                  # SQLite data access layer (better-sqlite3)
+  adminCache.js          # In-memory cache for Telegram admin lookups
+  CooldownMap.js         # Reusable rate-limiter / cooldown utility
   handlers/
     welcome.js           # New member join handler
     intro.js             # Intro channel message listener
     gatekeeper.js        # Main group message filter
     admin.js             # Admin commands
+tests/
+  CooldownMap.test.js    # Rate-limiter unit tests
+  config.test.js         # Config and sanitization unit tests
+  db.test.js             # Database layer unit tests
+  adminCache.test.js     # Admin cache unit tests
+  integration.test.js    # Cross-handler user flow integration tests
+  handlers/
+    welcome.test.js
+    intro.test.js
+    gatekeeper.test.js
+    admin.test.js
 ```
 
 ## Environment Variables

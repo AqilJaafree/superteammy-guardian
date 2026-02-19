@@ -38,7 +38,7 @@ class CooldownMap {
   _purge() {
     const now = Date.now();
     for (const [key, val] of this._map) {
-      const ts = typeof val === 'object' ? val.firstAttempt ?? val.expires : val;
+      const ts = typeof val === 'object' ? val.firstAttempt : val;
       if (now - ts > this._windowMs) this._map.delete(key);
     }
   }
