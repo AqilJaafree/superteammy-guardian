@@ -10,6 +10,7 @@ jest.mock('../../src/CooldownMap', () => jest.fn().mockImplementation(() => mock
 jest.mock('../../src/config', () => ({
   getMainGroupId: jest.fn(() => -100111),
   getIntroChannelId: jest.fn(() => -100999),
+  getIntroTopicId: jest.fn(() => null),
   WELCOME_COOLDOWN_MS: 5_000,
   MAX_NEW_MEMBERS_PER_EVENT: 10,
   WELCOME_MESSAGE: (name) => `Welcome ${name}!`,
@@ -38,6 +39,9 @@ function makeCtx({ chatId = MAIN_GROUP, members = [makeMember()] } = {}) {
     chat: { id: chatId },
     message: { new_chat_members: members },
     reply: jest.fn().mockResolvedValue({ message_id: 777 }),
+    telegram: {
+      deleteMessage: jest.fn().mockResolvedValue(true),
+    },
   };
 }
 
@@ -47,6 +51,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockCooldownInstance.isLimited.mockReturnValue(false);
   mockCooldownInstance.touch.mockReset();
+  // Default: user is not in DB (brand new member).
+  db.getUser.mockReturnValue(null);
   const bot = makeBot();
   welcome.register(bot);
   handler = bot.getHandler();
@@ -83,10 +89,17 @@ describe('normal join', () => {
     expect(db.upsertUser).toHaveBeenCalledWith(42, 'alice', 'Alice');
   });
 
-  test('sends a welcome message', async () => {
-    const ctx = makeCtx({ members: [makeMember({ firstName: 'Alice' })] });
-    await handler(ctx);
+  test('sends welcome message to the group', async () => {
+    const ctx = makeCtx({ members: [makeMember({ id: 1, firstName: 'Alice' })] });
+    handler(ctx);
     expect(ctx.reply).toHaveBeenCalledWith('Welcome Alice!');
+  });
+
+  test('stores the welcome message ID in DB after sending', async () => {
+    const ctx = makeCtx({ members: [makeMember({ id: 1, firstName: 'Alice' })] });
+    handler(ctx);
+    await Promise.resolve(); // flush .then()
+    expect(db.setWelcomeMsgId).toHaveBeenCalledWith(1, 777);
   });
 });
 
@@ -99,7 +112,7 @@ describe('welcome cooldown', () => {
       .mockReturnValueOnce(true); // second member: throttled
     const members = [makeMember({ id: 1 }), makeMember({ id: 2 })];
     const ctx = makeCtx({ members });
-    await handler(ctx);
+    handler(ctx);
     expect(db.upsertUser).toHaveBeenCalledTimes(2); // both tracked
     expect(ctx.reply).toHaveBeenCalledTimes(1);     // only one welcome
   });
@@ -124,7 +137,54 @@ describe('mass join (> MAX_NEW_MEMBERS_PER_EVENT)', () => {
   test('sends no welcome messages', async () => {
     const members = Array.from({ length: 11 }, (_, i) => makeMember({ id: i + 1 }));
     const ctx = makeCtx({ members });
-    await handler(ctx);
+    handler(ctx);
     expect(ctx.reply).not.toHaveBeenCalled();
+  });
+});
+
+// ---- Rejoin: already-introduced user ----
+
+describe('rejoin: already-introduced user', () => {
+  test('does not send a welcome to an introduced user who rejoins', () => {
+    db.getUser.mockReturnValue({ user_id: 1, introduced: 1, welcome_msg_id: null });
+    const ctx = makeCtx({ members: [makeMember({ id: 1, firstName: 'Alice' })] });
+    handler(ctx);
+    expect(db.upsertUser).toHaveBeenCalled(); // DB record still refreshed
+    expect(ctx.reply).not.toHaveBeenCalled(); // no welcome message
+  });
+
+  test('does not delete any message when an introduced user rejoins', () => {
+    db.getUser.mockReturnValue({ user_id: 1, introduced: 1, welcome_msg_id: 555 });
+    const ctx = makeCtx({ members: [makeMember({ id: 1 })] });
+    handler(ctx);
+    expect(ctx.telegram.deleteMessage).not.toHaveBeenCalled();
+  });
+});
+
+// ---- Rejoin: pending user ----
+
+describe('rejoin: pending user', () => {
+  test('deletes the old welcome message and sends a new one', () => {
+    db.getUser.mockReturnValue({ user_id: 1, introduced: 0, welcome_msg_id: 555 });
+    const ctx = makeCtx({ members: [makeMember({ id: 1, firstName: 'Alice' })] });
+    handler(ctx);
+    expect(ctx.telegram.deleteMessage).toHaveBeenCalledWith(MAIN_GROUP, 555);
+    expect(ctx.reply).toHaveBeenCalledWith('Welcome Alice!');
+  });
+
+  test('does not call deleteMessage when pending user has no previous welcome', () => {
+    db.getUser.mockReturnValue({ user_id: 1, introduced: 0, welcome_msg_id: null });
+    const ctx = makeCtx({ members: [makeMember({ id: 1, firstName: 'Alice' })] });
+    handler(ctx);
+    expect(ctx.telegram.deleteMessage).not.toHaveBeenCalled();
+    expect(ctx.reply).toHaveBeenCalledWith('Welcome Alice!');
+  });
+
+  test('sends a welcome for a brand-new user not yet in the DB', () => {
+    // db.getUser returns null (set in beforeEach)
+    const ctx = makeCtx({ members: [makeMember({ id: 1, firstName: 'Alice' })] });
+    handler(ctx);
+    expect(ctx.telegram.deleteMessage).not.toHaveBeenCalled();
+    expect(ctx.reply).toHaveBeenCalledWith('Welcome Alice!');
   });
 });

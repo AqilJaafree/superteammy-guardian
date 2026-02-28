@@ -19,11 +19,14 @@ let _mainGroupId = process.env.MAIN_GROUP_ID ? Number(process.env.MAIN_GROUP_ID)
 let _introChannelId = process.env.INTRO_CHANNEL_ID ? Number(process.env.INTRO_CHANNEL_ID) : null;
 const _mainGroupFromEnv = !!process.env.MAIN_GROUP_ID;
 const _introChannelFromEnv = !!process.env.INTRO_CHANNEL_ID;
+let _introTopicId = null;
 
 function getMainGroupId() { return _mainGroupId; }
 function setMainGroupId(id) { _mainGroupId = id; }
 function getIntroChannelId() { return _introChannelId; }
 function setIntroChannelId(id) { _introChannelId = id; }
+function getIntroTopicId() { return _introTopicId; }
+function setIntroTopicId(id) { _introTopicId = id; }
 function isMainGroupFromEnv() { return _mainGroupFromEnv; }
 function isIntroChannelFromEnv() { return _introChannelFromEnv; }
 
@@ -46,6 +49,8 @@ module.exports = {
   setMainGroupId,
   getIntroChannelId,
   setIntroChannelId,
+  getIntroTopicId,
+  setIntroTopicId,
   isMainGroupFromEnv,
   isIntroChannelFromEnv,
 
@@ -72,7 +77,7 @@ module.exports = {
   ],
 
   // Message templates
-  WELCOME_MESSAGE: (firstName, introChannelId) =>
+  WELCOME_MESSAGE: (firstName, introChannelId, introTopicId) =>
     `Hey ${sanitizeName(firstName)}! Welcome to Superteam Malaysia!\n\n` +
     `Before you can chat here, please introduce yourself in our intro channel.\n\n` +
     `Here's a suggested format:\n` +
@@ -86,7 +91,7 @@ module.exports = {
     `and I'm excited about DeFi. Fun fact: I once mass-adopted a dozen stray cats. ` +
     `I'd love to help with community tooling and hackathon projects!"\n\n` +
     (introChannelId
-      ? `Post your intro here: https://t.me/c/${String(introChannelId).replace(/^-100/, '')}`
+      ? `Post your intro here: https://t.me/c/${String(introChannelId).replace(/^-100/, '')}${introTopicId ? `/${introTopicId}` : ''}`
       : 'Post your intro in the intro channel!'),
 
   REMINDER_MESSAGE:

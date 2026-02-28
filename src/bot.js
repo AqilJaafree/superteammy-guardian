@@ -46,6 +46,13 @@ if (!config.getIntroChannelId()) {
     config.setIntroChannelId(parsed);
   }
 }
+if (!config.getIntroTopicId()) {
+  const saved = db.getSetting('INTRO_TOPIC_ID');
+  const parsed = Number(saved);
+  if (saved && parsed > 0 && Number.isInteger(parsed)) {
+    config.setIntroTopicId(parsed);
+  }
+}
 
 bot.launch();
 console.log('Bot started');

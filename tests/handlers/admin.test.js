@@ -7,6 +7,8 @@ jest.mock('../../src/config', () => ({
   setMainGroupId: jest.fn(),
   getIntroChannelId: jest.fn(() => -100999),
   setIntroChannelId: jest.fn(),
+  getIntroTopicId: jest.fn(() => null),
+  setIntroTopicId: jest.fn(),
   isMainGroupFromEnv: jest.fn(() => false),
   isIntroChannelFromEnv: jest.fn(() => false),
   EPHEMERAL_REPLY_TTL_MS: 0, // fire immediately so timers don't linger
@@ -64,6 +66,7 @@ beforeEach(() => {
   // Re-establish defaults after the reset.
   config.getMainGroupId.mockReturnValue(-100111);
   config.getIntroChannelId.mockReturnValue(-100999);
+  config.getIntroTopicId.mockReturnValue(null);
   config.isMainGroupFromEnv.mockReturnValue(false);
   config.isIntroChannelFromEnv.mockReturnValue(false);
   config.sanitizeName.mockImplementation((name) => name || 'N/A');

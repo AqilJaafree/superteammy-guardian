@@ -72,6 +72,9 @@ function makeJoinCtx({ chatId, members }) {
     chat: { id: chatId },
     message: { new_chat_members: members },
     reply: jest.fn().mockResolvedValue({ message_id: 77777 }),
+    telegram: {
+      deleteMessage: jest.fn().mockResolvedValue(true),
+    },
   };
 }
 
@@ -146,7 +149,7 @@ describe('Complete onboarding flow', () => {
   test('join → blocked → intro → unblocked', async () => {
     const user = makeUser({ id: 101, username: 'alice', firstName: 'Alice' });
 
-    // Step 1: user joins the main group — DB record created, welcome sent
+    // Step 1: user joins the main group — DB record created, welcome sent to group
     const joinCtx = makeJoinCtx({ chatId: MAIN_GROUP, members: [user] });
     await bot.dispatchJoin(joinCtx);
     expect(db.getUser(101)).toMatchObject({ user_id: 101, introduced: 0 });
@@ -225,13 +228,13 @@ describe('Intro channel validation', () => {
 });
 
 describe('Gatekeeper', () => {
-  test('pre-bot user (no DB record) can post in main group freely', async () => {
+  test('user with no DB record is blocked', async () => {
     const user = makeUser({ id: 201 });
-    // No DB record — user predates the bot
+    // No DB record
 
     const ctx = makeMessageCtx({ chatId: MAIN_GROUP, user });
     await bot.dispatchMessage(ctx);
-    expect(ctx.deleteMessage).not.toHaveBeenCalled();
+    expect(ctx.deleteMessage).toHaveBeenCalled();
   });
 
   test('group admin is never blocked even without an intro', async () => {

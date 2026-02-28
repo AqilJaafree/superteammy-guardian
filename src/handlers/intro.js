@@ -1,12 +1,9 @@
 const config = require('../config');
 const db = require('../db');
 const CooldownMap = require('../CooldownMap');
+const { logError } = require('../utils');
 
 const introRateLimiter = new CooldownMap(config.INTRO_RATE_LIMIT_WINDOW_MS, { cleanupMultiplier: 2 });
-
-function logError(promise, label) {
-  promise.catch((err) => console.error(`${label}:`, err.message));
-}
 
 function isValidIntro(text) {
   if (text.length < config.INTRO_MIN_LENGTH) return false;
@@ -19,9 +16,16 @@ function isValidIntro(text) {
   return matches.length >= 2 || text.length >= config.INTRO_KEYWORD_BYPASS_LENGTH;
 }
 
+function isIntroChannel(ctx) {
+  if (ctx.chat.id !== config.getIntroChannelId()) return false;
+  const topicId = config.getIntroTopicId();
+  if (!topicId) return true;
+  return (ctx.message?.message_thread_id ?? null) === topicId;
+}
+
 function register(bot) {
   bot.on('message', (ctx, next) => {
-    if (ctx.chat.id !== config.getIntroChannelId()) return next();
+    if (!isIntroChannel(ctx)) return next();
     if (!ctx.from) return;
     // Ignore messages posted "as channel" — from.id would be the channel, not a real user.
     if (ctx.from.id === ctx.chat.id) return;
@@ -59,6 +63,10 @@ function register(bot) {
 
     if (isValidIntro(text)) {
       db.markIntroduced(userId, ctx.message.message_id);
+      // Delete the welcome message from the main group now that they've introduced.
+      if (user.welcome_msg_id) {
+        ctx.telegram.deleteMessage(config.getMainGroupId(), user.welcome_msg_id).catch(() => {});
+      }
       logError(
         ctx.reply(config.INTRO_ACCEPTED_MESSAGE(ctx.from.first_name), {
           reply_parameters: { message_id: ctx.message.message_id },

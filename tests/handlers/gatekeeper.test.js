@@ -17,6 +17,7 @@ jest.mock('../../src/config', () => ({
 
 const db = require('../../src/db');
 const adminCache = require('../../src/adminCache');
+const config = require('../../src/config');
 const gatekeeper = require('../../src/handlers/gatekeeper');
 
 const MAIN_GROUP = -100111;
@@ -24,9 +25,14 @@ const OTHER_CHAT = -100222;
 
 function makeBot() {
   let messageHandler;
+  let editedMessageHandler;
   return {
-    on: jest.fn((event, fn) => { if (event === 'message') messageHandler = fn; }),
+    on: jest.fn((event, fn) => {
+      if (event === 'message') messageHandler = fn;
+      if (event === 'edited_message') editedMessageHandler = fn;
+    }),
     getHandler: () => messageHandler,
+    getEditHandler: () => editedMessageHandler,
   };
 }
 
@@ -44,6 +50,7 @@ function makeCtx({ chatId = MAIN_GROUP, userId = 123, isBot = false } = {}) {
 }
 
 let handler;
+let editHandler;
 let next;
 
 beforeEach(() => {
@@ -51,9 +58,11 @@ beforeEach(() => {
   mockCooldownInstance.isLimited.mockReturnValue(false);
   mockCooldownInstance.touch.mockReset();
   adminCache.isAdmin.mockResolvedValue(false);
+  config.getMainGroupId.mockReturnValue(MAIN_GROUP);
   const bot = makeBot();
   gatekeeper.register(bot);
   handler = bot.getHandler();
+  editHandler = bot.getEditHandler();
   next = jest.fn();
 });
 
@@ -74,16 +83,24 @@ describe('pass-through: next() is called', () => {
     expect(ctx.deleteMessage).not.toHaveBeenCalled();
   });
 
-  test('when the sender is a group admin', async () => {
-    adminCache.isAdmin.mockResolvedValue(true);
+  test('when the message is a join service message', async () => {
     const ctx = makeCtx();
+    ctx.message = { message_id: 1, new_chat_members: [{ id: 123 }] };
     await handler(ctx, next);
     expect(next).toHaveBeenCalled();
     expect(ctx.deleteMessage).not.toHaveBeenCalled();
   });
 
-  test('when the user has no DB record (pre-bot member)', async () => {
-    db.getUser.mockReturnValue(null);
+  test('when the message is a leave service message', async () => {
+    const ctx = makeCtx();
+    ctx.message = { message_id: 1, left_chat_member: { id: 123 } };
+    await handler(ctx, next);
+    expect(next).toHaveBeenCalled();
+    expect(ctx.deleteMessage).not.toHaveBeenCalled();
+  });
+
+  test('when the sender is a group admin', async () => {
+    adminCache.isAdmin.mockResolvedValue(true);
     const ctx = makeCtx();
     await handler(ctx, next);
     expect(next).toHaveBeenCalled();
@@ -102,6 +119,14 @@ describe('pass-through: next() is called', () => {
 // ---- Blocking cases ----
 
 describe('blocking: un-introduced user', () => {
+  test('blocks a user with no DB record', async () => {
+    db.getUser.mockReturnValue(null);
+    const ctx = makeCtx();
+    await handler(ctx, next);
+    expect(ctx.deleteMessage).toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+  });
+
   test('deletes the message', async () => {
     db.getUser.mockReturnValue({ user_id: 123, introduced: 0 });
     const ctx = makeCtx();
@@ -125,5 +150,86 @@ describe('blocking: un-introduced user', () => {
     await handler(ctx, next);
     expect(ctx.deleteMessage).toHaveBeenCalled(); // message is still deleted
     expect(ctx.reply).not.toHaveBeenCalled();     // but no reminder
+  });
+});
+
+// ---- Unconfigured state ----
+
+describe('unconfigured state (getMainGroupId returns null)', () => {
+  test('does nothing and does not call next() when main group ID is not set', async () => {
+    config.getMainGroupId.mockReturnValue(null);
+    db.getUser.mockReturnValue(null);
+    const ctx = makeCtx();
+    await handler(ctx, next);
+    expect(next).not.toHaveBeenCalled();
+    expect(ctx.deleteMessage).not.toHaveBeenCalled();
+    expect(ctx.reply).not.toHaveBeenCalled();
+  });
+});
+
+// ---- edited_message handler ----
+
+describe('edited_message: pass-through cases', () => {
+  test('calls next() for a message not in the main group', async () => {
+    const ctx = makeCtx({ chatId: OTHER_CHAT });
+    await editHandler(ctx, next);
+    expect(next).toHaveBeenCalled();
+    expect(ctx.deleteMessage).not.toHaveBeenCalled();
+  });
+
+  test('calls next() when main group is not configured', async () => {
+    config.getMainGroupId.mockReturnValue(null);
+    const ctx = makeCtx();
+    await editHandler(ctx, next);
+    expect(next).toHaveBeenCalled();
+    expect(ctx.deleteMessage).not.toHaveBeenCalled();
+  });
+
+  test('calls next() when sender is a bot', async () => {
+    const ctx = makeCtx({ isBot: true });
+    await editHandler(ctx, next);
+    expect(next).toHaveBeenCalled();
+    expect(ctx.deleteMessage).not.toHaveBeenCalled();
+  });
+
+  test('calls next() when sender is a group admin', async () => {
+    adminCache.isAdmin.mockResolvedValue(true);
+    const ctx = makeCtx();
+    await editHandler(ctx, next);
+    expect(next).toHaveBeenCalled();
+    expect(ctx.deleteMessage).not.toHaveBeenCalled();
+  });
+
+  test('calls next() when the user is introduced', async () => {
+    db.getUser.mockReturnValue({ user_id: 123, introduced: 1 });
+    const ctx = makeCtx();
+    await editHandler(ctx, next);
+    expect(next).toHaveBeenCalled();
+    expect(ctx.deleteMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe('edited_message: blocking cases', () => {
+  test('deletes an edit from a user with introduced=0', async () => {
+    db.getUser.mockReturnValue({ user_id: 123, introduced: 0 });
+    const ctx = makeCtx();
+    await editHandler(ctx, next);
+    expect(ctx.deleteMessage).toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('deletes an edit from a user with no DB record', async () => {
+    db.getUser.mockReturnValue(null);
+    const ctx = makeCtx();
+    await editHandler(ctx, next);
+    expect(ctx.deleteMessage).toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('does not send a reminder for blocked edits', async () => {
+    db.getUser.mockReturnValue({ user_id: 123, introduced: 0 });
+    const ctx = makeCtx();
+    await editHandler(ctx, next);
+    expect(ctx.reply).not.toHaveBeenCalled();
   });
 });

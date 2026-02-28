@@ -40,10 +40,14 @@ function initialize() {
       introduced    INTEGER DEFAULT 0,
       introduced_at TEXT,
       joined_at     TEXT DEFAULT (datetime('now')),
-      intro_msg_id  INTEGER,
-      updated_at    TEXT DEFAULT (datetime('now'))
+      intro_msg_id   INTEGER,
+      welcome_msg_id INTEGER,
+      updated_at     TEXT DEFAULT (datetime('now'))
     )
   `);
+
+  // Migration: add welcome_msg_id to databases that predate this column.
+  try { db.exec('ALTER TABLE users ADD COLUMN welcome_msg_id INTEGER'); } catch (_) {}
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS settings (
@@ -58,7 +62,7 @@ function getSetting(key) {
   return row ? row.value : null;
 }
 
-const VALID_SETTING_KEYS = ['MAIN_GROUP_ID', 'INTRO_CHANNEL_ID'];
+const VALID_SETTING_KEYS = ['MAIN_GROUP_ID', 'INTRO_CHANNEL_ID', 'INTRO_TOPIC_ID'];
 
 function setSetting(key, value) {
   if (!VALID_SETTING_KEYS.includes(key)) {
@@ -115,6 +119,14 @@ function markIntroduced(userId, msgId) {
   `).run(msgId || null, userId);
 }
 
+function setWelcomeMsgId(userId, msgId) {
+  assertSafeInteger(userId, 'userId');
+  if (msgId != null) assertSafeInteger(msgId, 'msgId');
+  db.prepare(`
+    UPDATE users SET welcome_msg_id = ?, updated_at = datetime('now') WHERE user_id = ?
+  `).run(msgId || null, userId);
+}
+
 function resetUser(userId) {
   assertSafeInteger(userId, 'userId');
   db.prepare(`
@@ -122,6 +134,7 @@ function resetUser(userId) {
       introduced = 0,
       introduced_at = NULL,
       intro_msg_id = NULL,
+      welcome_msg_id = NULL,
       updated_at = datetime('now')
     WHERE user_id = ?
   `).run(userId);
@@ -143,4 +156,4 @@ function close() {
   }
 }
 
-module.exports = { initialize, getUser, upsertUser, markIntroduced, resetUser, getPending, getSetting, setSetting, close };
+module.exports = { initialize, getUser, upsertUser, markIntroduced, setWelcomeMsgId, resetUser, getPending, getSetting, setSetting, close };

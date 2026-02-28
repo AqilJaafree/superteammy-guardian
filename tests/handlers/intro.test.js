@@ -9,7 +9,9 @@ const mockCooldownInstance = {
 jest.mock('../../src/db');
 jest.mock('../../src/CooldownMap', () => jest.fn().mockImplementation(() => mockCooldownInstance));
 jest.mock('../../src/config', () => ({
+  getMainGroupId: jest.fn(() => -100111),
   getIntroChannelId: jest.fn(() => -100999),
+  getIntroTopicId: jest.fn(() => null),
   INTRO_RATE_LIMIT_WINDOW_MS: 60_000,
   INTRO_RATE_LIMIT_MAX: 5,
   INTRO_MIN_LENGTH: 50,
@@ -40,6 +42,7 @@ function makeCtx({ chatId = INTRO_CHAT, userId = 123, text = null, messageId = 1
     from: { id: userId, username: 'testuser', first_name: 'Test' },
     message: { message_id: messageId, text },
     reply: jest.fn().mockResolvedValue({ message_id: 999 }),
+    telegram: { deleteMessage: jest.fn().mockResolvedValue(true) },
   };
 }
 
@@ -154,6 +157,18 @@ describe('intro validation', () => {
       expect.stringContaining('Thanks'),
       expect.anything(),
     );
+  });
+
+  test('deletes the welcome message from the group after accepting intro', async () => {
+    const text = 'who are you: dev. what do you do: build stuff. padding!';
+    const ctx = await run(text, { user_id: 123, introduced: 0, welcome_msg_id: 555 });
+    expect(ctx.telegram.deleteMessage).toHaveBeenCalledWith(-100111, 555);
+  });
+
+  test('does not try to delete welcome message when none was stored', async () => {
+    const text = 'who are you: dev. what do you do: build stuff. padding!';
+    const ctx = await run(text, { user_id: 123, introduced: 0, welcome_msg_id: null });
+    expect(ctx.telegram.deleteMessage).not.toHaveBeenCalled();
   });
 
   test('accepts an intro >= 150 chars without any keywords (bypass)', async () => {

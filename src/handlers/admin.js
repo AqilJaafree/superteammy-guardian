@@ -2,10 +2,6 @@ const config = require('../config');
 const db = require('../db');
 const adminCache = require('../adminCache');
 
-function logError(promise, label) {
-  promise.catch((err) => console.error(`${label}:`, err.message));
-}
-
 /**
  * Check if the user is an admin of the current chat.
  */
@@ -32,6 +28,12 @@ function ephemeralReply(ctx, text) {
     .catch((err) => console.error('Failed to send ephemeral reply:', err.message));
 }
 
+function formatUserDisplay(user) {
+  const name = config.sanitizeName(user.first_name) || 'N/A';
+  const username = user.username ? config.sanitizeName(user.username) : 'N/A';
+  return { name, username };
+}
+
 function resolveTargetId(ctx) {
   if (ctx.message.reply_to_message) {
     const from = ctx.message.reply_to_message.from;
@@ -56,7 +58,6 @@ function requireMainGroupAdmin(handler) {
   return async (ctx) => {
     if (!isMainGroup(ctx.chat.id)) return;
     if (!ctx.from) return;
-    if (!config.getMainGroupId()) return;
     if (!(await adminCache.isAdmin(ctx.telegram, config.getMainGroupId(), ctx.from.id))) return;
     return handler(ctx);
   };
@@ -105,15 +106,20 @@ function register(bot) {
     }
 
     const chatId = ctx.chat.id;
-    if (chatId === config.getMainGroupId()) {
-      return ephemeralReply(ctx, 'The intro channel cannot be the same as the main group.');
+    const topicId = ctx.message?.message_thread_id ?? null;
+    if (chatId === config.getMainGroupId() && !topicId) {
+      return ephemeralReply(ctx, 'The intro channel cannot be the same as the main group. Run /setintro inside a forum topic to use a topic as the intro channel.');
     }
     if (config.isIntroChannelFromEnv()) {
       return ephemeralReply(ctx, 'Intro channel is set via INTRO_CHANNEL_ID environment variable. Remove it from .env to use /setintro instead.');
     }
     db.setSetting('INTRO_CHANNEL_ID', chatId);
     config.setIntroChannelId(chatId);
-    ephemeralReply(ctx, 'Intro channel set to this chat.');
+    db.setSetting('INTRO_TOPIC_ID', topicId ? String(topicId) : '0');
+    config.setIntroTopicId(topicId);
+    ephemeralReply(ctx, topicId
+      ? 'Intro topic set to this forum topic.'
+      : 'Intro channel set to this chat.');
   });
 
   // ---- Management commands (main group only, main group admins) ----
@@ -159,10 +165,9 @@ function register(bot) {
     }
 
     const status = user.introduced ? 'Introduced' : 'Pending';
-    const safeName = config.sanitizeName(user.first_name) || 'N/A';
-    const safeUsername = user.username ? config.sanitizeName(user.username) : 'N/A';
+    const { name, username } = formatUserDisplay(user);
     const lines = [
-      `User: ${safeName} (@${safeUsername})`,
+      `User: ${name} (@${username})`,
       `ID: ${user.user_id}`,
       `Status: ${status}`,
       `Joined: ${user.joined_at || 'N/A'}`,
@@ -193,9 +198,8 @@ function register(bot) {
     }
 
     const lines = page.map((u) => {
-      const name = config.sanitizeName(u.first_name) || 'N/A';
-      const uname = u.username ? config.sanitizeName(u.username) : 'N/A';
-      return `- ${name} (@${uname}) -- ID: ${u.user_id}`;
+      const { name, username } = formatUserDisplay(u);
+      return `- ${name} (@${username}) -- ID: ${u.user_id}`;
     });
     let text = `Pending introductions (${pending.length}) — page ${pageNum}/${totalPages}:\n\n${lines.join('\n')}`;
     if (pageNum < totalPages) {
