@@ -193,13 +193,23 @@ describe('Intro channel validation', () => {
     expect(acceptCtx.reply).toHaveBeenCalled();
   });
 
-  test('bypass: text >= 150 chars is accepted without keyword matches', async () => {
+  test('bypass: text >= 80 chars is accepted without keyword matches', async () => {
     const user = makeUser({ id: 103 });
     db.upsertUser(103, user.username, user.first_name);
 
-    const ctx = makeMessageCtx({ chatId: INTRO_CHANNEL, user, text: 'x'.repeat(150) });
+    const ctx = makeMessageCtx({ chatId: INTRO_CHANNEL, user, text: 'x'.repeat(80) });
     await bot.dispatchMessage(ctx);
     expect(db.getUser(103).introduced).toBe(1);
+  });
+
+  test('bypass: casual natural intro >= 80 chars is accepted without keyword phrases', async () => {
+    const user = makeUser({ id: 104 });
+    db.upsertUser(104, user.username, user.first_name);
+
+    const text = 'hi i am dahri and i like anime and i dont like to eat sea food since i see food i eat';
+    const ctx = makeMessageCtx({ chatId: INTRO_CHANNEL, user, text });
+    await bot.dispatchMessage(ctx);
+    expect(db.getUser(104).introduced).toBe(1);
   });
 
   test('intro channel messages do not reach gatekeeper (no deletion)', async () => {

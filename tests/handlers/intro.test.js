@@ -7,6 +7,7 @@ const mockCooldownInstance = {
 };
 
 jest.mock('../../src/db');
+jest.mock('../../src/adminCache');
 jest.mock('../../src/CooldownMap', () => jest.fn().mockImplementation(() => mockCooldownInstance));
 jest.mock('../../src/config', () => ({
   getMainGroupId: jest.fn(() => -100111),
@@ -16,13 +17,14 @@ jest.mock('../../src/config', () => ({
   INTRO_RATE_LIMIT_MAX: 5,
   INTRO_MIN_LENGTH: 50,
   INTRO_MAX_LENGTH: 4000,
-  INTRO_KEYWORD_BYPASS_LENGTH: 150,
+  INTRO_KEYWORD_BYPASS_LENGTH: 80,
   INTRO_KEYWORDS: ['who are you', 'what do you do', 'where are you based', 'fun fact', 'contribute'],
   INTRO_ACCEPTED_MESSAGE: (name) => `Thanks ${name}!`,
   INTRO_NUDGE_MESSAGE: 'Tell us more about yourself!',
 }));
 
 const db = require('../../src/db');
+const adminCache = require('../../src/adminCache');
 const intro = require('../../src/handlers/intro');
 
 const INTRO_CHAT = -100999;
@@ -52,6 +54,7 @@ let next;
 beforeEach(() => {
   jest.clearAllMocks();
   mockCooldownInstance.increment.mockReturnValue(false);
+  adminCache.isAdmin.mockResolvedValue(false);
   const bot = makeBot();
   intro.register(bot);
   handler = bot.getHandler();
@@ -79,6 +82,33 @@ describe('chat filtering', () => {
     await handler(ctx, next);
     expect(db.getUser).not.toHaveBeenCalled();
     expect(ctx.reply).not.toHaveBeenCalled();
+  });
+});
+
+// ---- Admin bypass ----
+
+describe('admin bypass', () => {
+  test('does not nudge a main group admin posting in the intro channel', async () => {
+    adminCache.isAdmin.mockResolvedValue(true);
+    const ctx = makeCtx({ text: 'more longer' }); // short text that would fail validation
+    await handler(ctx, next);
+    expect(ctx.reply).not.toHaveBeenCalled();
+    expect(db.markIntroduced).not.toHaveBeenCalled();
+  });
+
+  test('does not mark an admin as introduced when they post in intro channel', async () => {
+    adminCache.isAdmin.mockResolvedValue(true);
+    const ctx = makeCtx({ text: 'x'.repeat(200) }); // long enough to pass validation
+    await handler(ctx, next);
+    expect(db.markIntroduced).not.toHaveBeenCalled();
+  });
+
+  test('still processes non-admin users normally', async () => {
+    adminCache.isAdmin.mockResolvedValue(false);
+    db.getUser.mockReturnValue({ user_id: 123, introduced: 0, welcome_msg_id: null });
+    const ctx = makeCtx({ text: 'hello' }); // too short
+    await handler(ctx, next);
+    expect(ctx.reply).toHaveBeenCalled();
   });
 });
 
@@ -171,13 +201,20 @@ describe('intro validation', () => {
     expect(ctx.telegram.deleteMessage).not.toHaveBeenCalled();
   });
 
-  test('accepts an intro >= 150 chars without any keywords (bypass)', async () => {
-    const ctx = await run('x'.repeat(150));
+  test('accepts an intro >= 80 chars without any keywords (bypass)', async () => {
+    const ctx = await run('x'.repeat(80));
     expect(db.markIntroduced).toHaveBeenCalledWith(123, 1);
   });
 
-  test('rejects an intro with only 1 keyword and < 150 chars', async () => {
-    // ~55 chars, only "who are you" matches, < 150 chars so bypass does not apply
+  test('accepts a casual intro >= 80 chars with no keyword phrases', async () => {
+    // Natural casual intro — no structured keywords, but long enough
+    const text = 'hi i am dahri and i like anime and i dont like to eat sea food since i see food i eat';
+    const ctx = await run(text);
+    expect(db.markIntroduced).toHaveBeenCalledWith(123, 1);
+  });
+
+  test('rejects an intro with only 1 keyword and < 80 chars', async () => {
+    // ~55 chars, only "who are you" matches, < 80 chars so bypass does not apply
     const text = 'who are you: I am a developer. padding padding pad!!';
     const ctx = await run(text);
     expect(db.markIntroduced).not.toHaveBeenCalled();

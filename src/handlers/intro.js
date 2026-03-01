@@ -1,19 +1,22 @@
 const config = require('../config');
 const db = require('../db');
+const adminCache = require('../adminCache');
 const CooldownMap = require('../CooldownMap');
 const { logError } = require('../utils');
 
 const introRateLimiter = new CooldownMap(config.INTRO_RATE_LIMIT_WINDOW_MS, { cleanupMultiplier: 2 });
+
+const MEDIA_NUDGE_MESSAGE = 'Please post a text introduction — photos and media are not accepted as intros.';
 
 function isValidIntro(text) {
   if (text.length < config.INTRO_MIN_LENGTH) return false;
   if (text.length > config.INTRO_MAX_LENGTH) return false;
 
   const lower = text.toLowerCase();
-  const matches = config.INTRO_KEYWORDS.filter((kw) => lower.includes(kw.toLowerCase()));
+  const keywordMatches = config.INTRO_KEYWORDS.filter((kw) => lower.includes(kw.toLowerCase()));
 
-  // Accept if long enough even without keywords (some people write freely)
-  return matches.length >= 2 || text.length >= config.INTRO_KEYWORD_BYPASS_LENGTH;
+  // Accept if either 2+ keywords match, or text is long enough even without keywords
+  return keywordMatches.length >= 2 || text.length >= config.INTRO_KEYWORD_BYPASS_LENGTH;
 }
 
 function isIntroChannel(ctx) {
@@ -23,64 +26,87 @@ function isIntroChannel(ctx) {
   return (ctx.message?.message_thread_id ?? null) === topicId;
 }
 
+function isChannelPost(ctx) {
+  return ctx.from.id === ctx.chat.id;
+}
+
+async function isMainGroupAdmin(ctx) {
+  const mainGroupId = config.getMainGroupId();
+  if (!mainGroupId) return false;
+  return adminCache.isAdmin(ctx.telegram, mainGroupId, ctx.from.id);
+}
+
+function sendReplyWithContext(ctx, message, errorLabel) {
+  logError(
+    ctx.reply(message, {
+      reply_parameters: { message_id: ctx.message.message_id },
+    }),
+    errorLabel
+  );
+}
+
+async function handleMediaPost(ctx) {
+  const user = db.getUser(ctx.from.id);
+  if (user && !user.introduced) {
+    sendReplyWithContext(ctx, MEDIA_NUDGE_MESSAGE, 'Failed to send media nudge');
+  }
+}
+
+async function ensureUserExists(userId, username, firstName) {
+  let user = db.getUser(userId);
+  if (!user) {
+    db.upsertUser(userId, username, firstName);
+    user = db.getUser(userId);
+  }
+  return user;
+}
+
+async function handleIntroSubmission(ctx, user, text) {
+  const userId = ctx.from.id;
+
+  if (isValidIntro(text)) {
+    db.markIntroduced(userId, ctx.message.message_id);
+
+    // Delete the welcome message from the main group
+    if (user.welcome_msg_id) {
+      await ctx.telegram.deleteMessage(config.getMainGroupId(), user.welcome_msg_id).catch(() => {});
+    }
+
+    sendReplyWithContext(
+      ctx,
+      config.INTRO_ACCEPTED_MESSAGE(ctx.from.first_name),
+      'Failed to send intro accepted'
+    );
+  } else {
+    sendReplyWithContext(ctx, config.INTRO_NUDGE_MESSAGE, 'Failed to send intro nudge');
+  }
+}
+
 function register(bot) {
-  bot.on('message', (ctx, next) => {
+  bot.on('message', async (ctx, next) => {
     if (!isIntroChannel(ctx)) return next();
     if (!ctx.from) return;
-    // Ignore messages posted "as channel" — from.id would be the channel, not a real user.
-    if (ctx.from.id === ctx.chat.id) return;
+    if (isChannelPost(ctx)) return;
+    if (await isMainGroupAdmin(ctx)) return;
+
+    // Handle media posts separately
     if (!ctx.message.text) {
-      // Only nudge non-introduced users who post media instead of text.
-      const uid = ctx.from.id;
-      const existing = db.getUser(uid);
-      if (existing && !existing.introduced) {
-        logError(
-          ctx.reply('Please post a text introduction — photos and media are not accepted as intros.', {
-            reply_parameters: { message_id: ctx.message.message_id },
-          }),
-          'Failed to send media nudge',
-        );
-      }
+      await handleMediaPost(ctx);
       return;
     }
 
     const userId = ctx.from.id;
     const text = ctx.message.text;
 
-    // Rate-limit intro submissions per user.
+    // Rate-limit intro submissions per user
     if (introRateLimiter.increment(userId, config.INTRO_RATE_LIMIT_MAX)) return;
 
-    let user = db.getUser(userId);
+    const user = await ensureUserExists(userId, ctx.from.username, ctx.from.first_name);
 
-    // User not tracked yet (joined before bot) -- create record first.
-    if (!user) {
-      db.upsertUser(userId, ctx.from.username, ctx.from.first_name);
-      user = db.getUser(userId);
-    }
-
-    // Already introduced -- let them post freely
+    // Already introduced users can post freely
     if (user.introduced) return;
 
-    if (isValidIntro(text)) {
-      db.markIntroduced(userId, ctx.message.message_id);
-      // Delete the welcome message from the main group now that they've introduced.
-      if (user.welcome_msg_id) {
-        ctx.telegram.deleteMessage(config.getMainGroupId(), user.welcome_msg_id).catch(() => {});
-      }
-      logError(
-        ctx.reply(config.INTRO_ACCEPTED_MESSAGE(ctx.from.first_name), {
-          reply_parameters: { message_id: ctx.message.message_id },
-        }),
-        'Failed to send intro accepted',
-      );
-    } else {
-      logError(
-        ctx.reply(config.INTRO_NUDGE_MESSAGE, {
-          reply_parameters: { message_id: ctx.message.message_id },
-        }),
-        'Failed to send intro nudge',
-      );
-    }
+    await handleIntroSubmission(ctx, user, text);
   });
 }
 

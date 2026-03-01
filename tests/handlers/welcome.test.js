@@ -6,6 +6,7 @@ const mockCooldownInstance = {
 };
 
 jest.mock('../../src/db');
+jest.mock('../../src/adminCache', () => ({ isAdmin: jest.fn().mockResolvedValue(false) }));
 jest.mock('../../src/CooldownMap', () => jest.fn().mockImplementation(() => mockCooldownInstance));
 jest.mock('../../src/config', () => ({
   getMainGroupId: jest.fn(() => -100111),
@@ -91,14 +92,13 @@ describe('normal join', () => {
 
   test('sends welcome message to the group', async () => {
     const ctx = makeCtx({ members: [makeMember({ id: 1, firstName: 'Alice' })] });
-    handler(ctx);
+    await handler(ctx);
     expect(ctx.reply).toHaveBeenCalledWith('Welcome Alice!');
   });
 
   test('stores the welcome message ID in DB after sending', async () => {
     const ctx = makeCtx({ members: [makeMember({ id: 1, firstName: 'Alice' })] });
-    handler(ctx);
-    await Promise.resolve(); // flush .then()
+    await handler(ctx);
     expect(db.setWelcomeMsgId).toHaveBeenCalledWith(1, 777);
   });
 });
@@ -112,7 +112,7 @@ describe('welcome cooldown', () => {
       .mockReturnValueOnce(true); // second member: throttled
     const members = [makeMember({ id: 1 }), makeMember({ id: 2 })];
     const ctx = makeCtx({ members });
-    handler(ctx);
+    await handler(ctx);
     expect(db.upsertUser).toHaveBeenCalledTimes(2); // both tracked
     expect(ctx.reply).toHaveBeenCalledTimes(1);     // only one welcome
   });
@@ -164,26 +164,26 @@ describe('rejoin: already-introduced user', () => {
 // ---- Rejoin: pending user ----
 
 describe('rejoin: pending user', () => {
-  test('deletes the old welcome message and sends a new one', () => {
+  test('deletes the old welcome message and sends a new one', async () => {
     db.getUser.mockReturnValue({ user_id: 1, introduced: 0, welcome_msg_id: 555 });
     const ctx = makeCtx({ members: [makeMember({ id: 1, firstName: 'Alice' })] });
-    handler(ctx);
+    await handler(ctx);
     expect(ctx.telegram.deleteMessage).toHaveBeenCalledWith(MAIN_GROUP, 555);
     expect(ctx.reply).toHaveBeenCalledWith('Welcome Alice!');
   });
 
-  test('does not call deleteMessage when pending user has no previous welcome', () => {
+  test('does not call deleteMessage when pending user has no previous welcome', async () => {
     db.getUser.mockReturnValue({ user_id: 1, introduced: 0, welcome_msg_id: null });
     const ctx = makeCtx({ members: [makeMember({ id: 1, firstName: 'Alice' })] });
-    handler(ctx);
+    await handler(ctx);
     expect(ctx.telegram.deleteMessage).not.toHaveBeenCalled();
     expect(ctx.reply).toHaveBeenCalledWith('Welcome Alice!');
   });
 
-  test('sends a welcome for a brand-new user not yet in the DB', () => {
+  test('sends a welcome for a brand-new user not yet in the DB', async () => {
     // db.getUser returns null (set in beforeEach)
     const ctx = makeCtx({ members: [makeMember({ id: 1, firstName: 'Alice' })] });
-    handler(ctx);
+    await handler(ctx);
     expect(ctx.telegram.deleteMessage).not.toHaveBeenCalled();
     expect(ctx.reply).toHaveBeenCalledWith('Welcome Alice!');
   });

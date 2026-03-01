@@ -88,6 +88,12 @@ function getUser(userId) {
   return db.prepare('SELECT * FROM users WHERE user_id = ?').get(userId) || null;
 }
 
+function getUserByUsername(username) {
+  if (!username || typeof username !== 'string') return null;
+  // Usernames are case-insensitive in Telegram
+  return db.prepare('SELECT * FROM users WHERE LOWER(username) = LOWER(?)').get(username) || null;
+}
+
 function upsertUser(userId, username, firstName) {
   assertSafeInteger(userId, 'userId');
   // Truncate string inputs to reasonable lengths to prevent storage abuse.
@@ -156,4 +162,4 @@ function close() {
   }
 }
 
-module.exports = { initialize, getUser, upsertUser, markIntroduced, setWelcomeMsgId, resetUser, getPending, getSetting, setSetting, close };
+module.exports = { initialize, getUser, getUserByUsername, upsertUser, markIntroduced, setWelcomeMsgId, resetUser, getPending, getSetting, setSetting, close };

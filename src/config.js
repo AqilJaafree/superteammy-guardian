@@ -35,7 +35,7 @@ const WELCOME_COOLDOWN_MS = 5_000;
 const MAX_NEW_MEMBERS_PER_EVENT = 10;
 const INTRO_RATE_LIMIT_WINDOW_MS = 60_000;
 const INTRO_RATE_LIMIT_MAX = 5;
-const INTRO_KEYWORD_BYPASS_LENGTH = 150;
+const INTRO_KEYWORD_BYPASS_LENGTH = 80;
 const REMINDER_COOLDOWN_MS = 30_000;
 const REMINDER_AUTO_DELETE_MS = 15_000;
 const EPHEMERAL_REPLY_TTL_MS = 30_000;
@@ -102,9 +102,9 @@ module.exports = {
     `Thanks for the intro, ${sanitizeName(firstName)}! You can now chat in the main group. Welcome aboard!`,
 
   INTRO_NUDGE_MESSAGE:
-    'Thanks for posting! Could you tell us a bit more about yourself? ' +
-    'Try including who you are, what you do, and how you want to contribute. ' +
-    'A few more sentences would help the community get to know you!',
+    'Thanks for posting! Your intro is a little short — aim for at least 2-3 sentences. ' +
+    'Tell us: who you are, what you do, where you\'re based, and how you\'d like to contribute. ' +
+    'The more you share, the better the community can get to know you!',
 
   sanitizeName,
 };
