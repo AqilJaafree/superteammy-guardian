@@ -157,3 +157,35 @@ tests/
 | `DB_PATH` | No | SQLite file path (default: `./data/bot.sqlite`) |
 
 See [GUIDE.md](GUIDE.md) for detailed usage instructions covering every user flow.
+
+## Claude Code
+
+If you're using [Claude Code](https://claude.ai/claude-code), this project includes a custom skill for adding new bot handlers.
+
+### `/add-handler`
+
+Scaffolds a complete new handler following the project's conventions — handler file, config additions, DB queries, bot wiring, and test file.
+
+**Setup:** copy the skill into your Claude commands directory:
+
+```bash
+cp add-handler.md .claude/commands/add-handler.md
+```
+
+**Usage:**
+
+```
+/add-handler <describe what the handler should do>
+```
+
+**Example:**
+
+```
+/add-handler warn users who send messages in all caps in the main group
+```
+
+Claude will generate:
+- `src/handlers/<name>.js` with the `register(bot)` pattern
+- Any additions needed in `src/config.js` and `src/db.js`
+- The wiring diff for `src/bot.js`
+- `tests/handlers/<name>.test.js` with Jest mock scaffolding
