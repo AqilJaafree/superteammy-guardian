@@ -14,7 +14,7 @@ Telegram onboarding bot for Superteam Malaysia. New members must introduce thems
 
 **Initial setup — registering the main group and intro channel:**
 
-<video src="docs/setgroupsetintro.mp4" controls muted></video>
+<video src="https://github.com/user-attachments/assets/3d4fb3c0-2457-447e-8f4a-02ca4b848849" controls muted></video>
 
 <table>
   <tr>
