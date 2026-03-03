@@ -4,21 +4,14 @@ if (!process.env.BOT_TOKEN) {
   process.exit(1);
 }
 
-/**
- * Sanitize user-supplied strings before embedding them in bot messages.
- * Strips characters that could be used for Telegram Markdown / HTML injection.
- */
-function sanitizeName(name) {
-  if (!name) return 'there';
-  const clean = name.replace(/[<>&\r\n\t*_`\[\]()~\\]/g, '').trim().slice(0, 64);
-  return clean || 'there';
-}
+const { sanitizeName } = require('./utils');
 
 // ---- Mutable chat IDs with getter/setter ----
 let _mainGroupId = process.env.MAIN_GROUP_ID ? Number(process.env.MAIN_GROUP_ID) : null;
 let _introChannelId = process.env.INTRO_CHANNEL_ID ? Number(process.env.INTRO_CHANNEL_ID) : null;
 const _mainGroupFromEnv = !!process.env.MAIN_GROUP_ID;
 const _introChannelFromEnv = !!process.env.INTRO_CHANNEL_ID;
+// No _introTopicFromEnv — INTRO_TOPIC_ID is not settable via env; use /setintro in a forum topic.
 let _introTopicId = null;
 
 function getMainGroupId() { return _mainGroupId; }

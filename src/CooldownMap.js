@@ -15,10 +15,21 @@ class CooldownMap {
   /** Record a timestamp for a key */
   touch(key) {
     if (this._maxSize && this._map.size >= this._maxSize) {
-      const oldest = this._map.keys().next().value;
-      this._map.delete(oldest);
+      // Prefer evicting an already-expired entry over an active one
+      const now = Date.now();
+      let evictKey = null;
+      for (const [k, val] of this._map) {
+        const ts = typeof val === 'object' ? val.firstAttempt : val;
+        if (now - ts > this._windowMs) { evictKey = k; break; }
+      }
+      this._map.delete(evictKey ?? this._map.keys().next().value);
     }
     this._map.set(key, Date.now());
+  }
+
+  /** Remove a key immediately (e.g. clear rate-limit counter after success) */
+  delete(key) {
+    this._map.delete(key);
   }
 
   /** Count-based rate-limit: returns true if key has exceeded max within window */

@@ -27,7 +27,8 @@ function isIntroChannel(ctx) {
 }
 
 function isChannelPost(ctx) {
-  return ctx.from.id === ctx.chat.id;
+  // sender_chat is set when a channel (rather than a user) sends the message
+  return !!ctx.message?.sender_chat;
 }
 
 async function isMainGroupAdmin(ctx) {
@@ -45,14 +46,14 @@ function sendReplyWithContext(ctx, message, errorLabel) {
   );
 }
 
-async function handleMediaPost(ctx) {
+function handleMediaPost(ctx) {
   const user = db.getUser(ctx.from.id);
   if (user && !user.introduced) {
     sendReplyWithContext(ctx, MEDIA_NUDGE_MESSAGE, 'Failed to send media nudge');
   }
 }
 
-async function ensureUserExists(userId, username, firstName) {
+function ensureUserExists(userId, username, firstName) {
   let user = db.getUser(userId);
   if (!user) {
     db.upsertUser(userId, username, firstName);
@@ -64,8 +65,14 @@ async function ensureUserExists(userId, username, firstName) {
 async function handleIntroSubmission(ctx, user, text) {
   const userId = ctx.from.id;
 
+  // Re-read from DB — a concurrent handler (multiple rapid messages) may have already
+  // committed introduced=1 between when `user` was fetched and now.
+  const fresh = db.getUser(userId);
+  if (fresh?.introduced) return;
+
   if (isValidIntro(text)) {
     db.markIntroduced(userId, ctx.message.message_id);
+    introRateLimiter.delete(userId); // clear counter — no need to track after success
 
     // Delete the welcome message from the main group
     if (user.welcome_msg_id) {
@@ -91,7 +98,7 @@ function register(bot) {
 
     // Handle media posts separately
     if (!ctx.message.text) {
-      await handleMediaPost(ctx);
+      handleMediaPost(ctx);
       return;
     }
 
@@ -101,7 +108,7 @@ function register(bot) {
     // Rate-limit intro submissions per user
     if (introRateLimiter.increment(userId, config.INTRO_RATE_LIMIT_MAX)) return;
 
-    const user = await ensureUserExists(userId, ctx.from.username, ctx.from.first_name);
+    const user = ensureUserExists(userId, ctx.from.username, ctx.from.first_name);
 
     // Already introduced users can post freely
     if (user.introduced) return;

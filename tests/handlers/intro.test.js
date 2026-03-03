@@ -4,6 +4,7 @@
 // functions (Jest hoists mock calls but allows this naming convention).
 const mockCooldownInstance = {
   increment: jest.fn().mockReturnValue(false), // not rate-limited by default
+  delete: jest.fn(),
 };
 
 jest.mock('../../src/db');
@@ -77,8 +78,9 @@ describe('chat filtering', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  test('ignores messages posted as the channel (from.id === chat.id)', async () => {
-    const ctx = makeCtx({ userId: INTRO_CHAT, text: 'channel post' });
+  test('ignores messages posted as the channel (sender_chat set)', async () => {
+    const ctx = makeCtx({ text: 'channel post' });
+    ctx.message.sender_chat = { id: INTRO_CHAT };
     await handler(ctx, next);
     expect(db.getUser).not.toHaveBeenCalled();
     expect(ctx.reply).not.toHaveBeenCalled();

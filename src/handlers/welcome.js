@@ -2,17 +2,8 @@ const config = require('../config');
 const db = require('../db');
 const adminCache = require('../adminCache');
 const CooldownMap = require('../CooldownMap');
-const { logError } = require('../utils');
 
 const welcomeCooldowns = new CooldownMap(config.WELCOME_COOLDOWN_MS, { cleanupMultiplier: 20 });
-
-async function shouldSkipWelcome(member, existing, ctx, isMassJoin) {
-  if (existing?.introduced) return true;
-  if (await adminCache.isAdmin(ctx.telegram, ctx.chat.id, member.id)) return true;
-  if (isMassJoin) return true;
-  if (welcomeCooldowns.isLimited(ctx.chat.id)) return true;
-  return false;
-}
 
 async function sendWelcomeMessage(ctx, member, existing) {
   // Clean up orphaned welcome message from previous join attempt
@@ -53,9 +44,18 @@ function register(bot) {
       // Always track users in DB, even during mass-join events
       db.upsertUser(member.id, member.username, member.first_name);
 
-      if (await shouldSkipWelcome(member, existing, ctx, isMassJoin)) continue;
+      if (existing?.introduced || isMassJoin) continue;
 
+      // Claim the cooldown slot synchronously — no await between isLimited and touch.
+      // JavaScript's single-threaded event loop guarantees these two lines are atomic,
+      // preventing two concurrent join events from both seeing isLimited()=false and
+      // both sending a welcome to the same chat.
+      if (welcomeCooldowns.isLimited(ctx.chat.id)) continue;
       welcomeCooldowns.touch(ctx.chat.id);
+
+      // Async checks happen after the slot is claimed
+      if (await adminCache.isAdmin(ctx.telegram, ctx.chat.id, member.id)) continue;
+
       await sendWelcomeMessage(ctx, member, existing);
     }
   });

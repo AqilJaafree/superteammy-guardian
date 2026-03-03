@@ -1,8 +1,8 @@
 const config = require('../config');
 const db = require('../db');
 const adminCache = require('../adminCache');
+const { getMention } = require('../utils');
 
-// Error messages
 const ERRORS = {
   PRIVATE_CHAT_SETGROUP: 'This command must be used in a group, not a private chat.',
   PRIVATE_CHAT_SETINTRO: 'This command must be used in a group or channel, not a private chat.',
@@ -18,7 +18,6 @@ const ERRORS = {
   USER_NOT_FOUND: 'User not found in database.',
 };
 
-// Success messages
 const SUCCESS = {
   MAIN_GROUP_SET: 'Main group set to this chat.',
   INTRO_TOPIC_SET: 'Intro topic set to this forum topic.',
@@ -56,10 +55,7 @@ function resolveTarget(ctx) {
   if (ctx.message.reply_to_message) {
     const from = ctx.message.reply_to_message.from;
     if (!from || from.is_bot) return null;
-    const mention = from.username
-      ? `@${from.username}`
-      : config.sanitizeName(from.first_name);
-    return { id: from.id, mention };
+    return { id: from.id, mention: getMention(from) };
   }
 
   const args = (ctx.message.text || '').split(/\s+/).slice(1);
@@ -70,18 +66,14 @@ function resolveTarget(ctx) {
     if (arg.startsWith('@')) {
       const user = db.getUserByUsername(arg.slice(1));
       if (!user) return null;
-      return { id: user.user_id, mention: `@${user.username}` };
+      return { id: user.user_id, mention: getMention(user) };
     }
 
     // Support /command <user_id>
     const parsed = Number(arg);
     if (Number.isInteger(parsed) && parsed > 0) {
       const user = db.getUser(parsed);
-      const mention = user?.username
-        ? `@${user.username}`
-        : user?.first_name
-          ? config.sanitizeName(user.first_name)
-          : `user ${parsed}`;
+      const mention = user ? getMention(user) : `user ${parsed}`;
       return { id: parsed, mention };
     }
   }
@@ -243,7 +235,19 @@ function register(bot) {
 
     const header = `Pending introductions (${pending.length}) — page ${pageNum}/${totalPages}:\n\n`;
     const footer = pageNum < totalPages ? `\n\nUse /pending ${pageNum + 1} for next page.` : '';
-    const text = header + userLines.join('\n') + footer;
+
+    // Build output line-by-line to stay within Telegram's 4096-char message limit.
+    const LIMIT = 3900 - header.length - footer.length;
+    const safeLines = [];
+    let length = 0;
+    for (const line of userLines) {
+      if (length + line.length + 1 > LIMIT) break;
+      safeLines.push(line);
+      length += line.length + 1;
+    }
+    const truncated = safeLines.length < userLines.length
+      ? `\n(${userLines.length - safeLines.length} entries omitted — use /pending ${pageNum + 1})` : '';
+    const text = header + safeLines.join('\n') + truncated + footer;
 
     ephemeralReply(ctx, text);
   }));

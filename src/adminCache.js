@@ -1,4 +1,4 @@
-const ADMIN_CACHE_MS = 5 * 60 * 1000;
+const ADMIN_CACHE_MS = 60 * 1000; // 1 minute — short enough to reflect permission changes promptly
 const ADMIN_CACHE_MAX = 10_000;
 
 // key: "chatId:userId" -> { isAdmin, expires }
@@ -14,8 +14,13 @@ async function isAdmin(telegram, chatId, userId) {
     const member = await telegram.getChatMember(chatId, userId);
     const result = member.status === 'creator' || member.status === 'administrator';
     if (_cache.size >= ADMIN_CACHE_MAX) {
-      const oldest = _cache.keys().next().value;
-      _cache.delete(oldest);
+      // Prefer evicting an already-expired entry over an active one
+      const now = Date.now();
+      let evictKey = null;
+      for (const [k, entry] of _cache) {
+        if (now >= entry.expires) { evictKey = k; break; }
+      }
+      _cache.delete(evictKey ?? _cache.keys().next().value);
     }
     _cache.set(key, { isAdmin: result, expires: Date.now() + ADMIN_CACHE_MS });
     return result;

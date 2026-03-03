@@ -8,6 +8,7 @@ Telegram onboarding bot for Superteam Malaysia. New members must introduce thems
 2. **User posts in the intro channel** — bot validates the intro and marks them as introduced
 3. **User posts in the main group** — if not introduced, message is deleted and a temporary reminder is sent
 4. **Group admins** can manually approve, reset, or check user status via commands
+5. **Any message containing a suspicious link** (URL shorteners, bare IP addresses, IDN homograph domains, or Telegram invite links) in the main group is **deleted** and the sender receives a warning — admins are exempt
 
 ## Quick Start
 
@@ -74,12 +75,12 @@ Any **Telegram group admin** can use these commands — no separate config neede
 
 | Command | Description |
 |---|---|
-| `/approve <user_id>` | Manually mark a user as introduced |
-| `/reset <user_id>` | Reset intro status (forces re-introduction) |
-| `/status <user_id>` | Check a user's current status |
+| `/approve <user_id or @username>` | Manually mark a user as introduced |
+| `/reset <user_id or @username>` | Reset intro status (forces re-introduction) |
+| `/status <user_id or @username>` | Check a user's current status |
 | `/pending` | List all users who haven't introduced yet |
 
-All management commands support replying to a user's message instead of passing a user ID.
+All management commands support a user ID, an `@username`, or replying to a message.
 
 ## Intro Validation
 
@@ -87,7 +88,7 @@ The bot uses a soft heuristic — not a strict template:
 
 - Message must be at least **50 characters**
 - Accepted if it contains **2+ keywords** (who are you, what do you do, where are you based, fun fact, contribute)
-- Messages **150+ characters** are accepted regardless of keywords
+- Messages **80+ characters** are accepted regardless of keywords
 - Messages over **4000 characters** are rejected
 
 Prefers false positives over false negatives — a borderline intro is better than blocking a real member.
@@ -106,6 +107,7 @@ src/
     intro.js             # Intro channel message listener
     gatekeeper.js        # Main group message filter
     admin.js             # Admin commands
+    security.js          # Suspicious link scanner (URL shorteners and bare IP addresses)
 tests/
   CooldownMap.test.js    # Rate-limiter unit tests
   config.test.js         # Config and sanitization unit tests
@@ -117,6 +119,7 @@ tests/
     intro.test.js
     gatekeeper.test.js
     admin.test.js
+    security.test.js
 ```
 
 ## Environment Variables

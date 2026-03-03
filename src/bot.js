@@ -5,13 +5,13 @@ const adminCache = require('./adminCache');
 const welcome = require('./handlers/welcome');
 const intro = require('./handlers/intro');
 const gatekeeper = require('./handlers/gatekeeper');
+const security = require('./handlers/security');
 const admin = require('./handlers/admin');
 
 const bot = new Telegraf(config.BOT_TOKEN);
 
-// ---- Global error handler ----
-// Catch Telegraf middleware errors so they do not crash the process
-// and do not leak internal details to end users.
+// Telegraf middleware errors are caught here to prevent process crashes.
+// Do not surface error internals in any reply — log only.
 bot.catch((err, ctx) => {
   const updateId = ctx?.update?.update_id ?? 'unknown';
   const errMsg = err instanceof Error ? err.message : String(err ?? 'unknown');
@@ -22,37 +22,28 @@ bot.catch((err, ctx) => {
 // 1. Admin commands first (so admins are not blocked)
 // 2. Welcome handler for new members
 // 3. Intro channel listener
-// 4. Gatekeeper last (filters messages in main group)
+// 4. Gatekeeper (filters messages in main group)
+// 5. Security (flags suspicious links from introduced users/admins)
 admin.register(bot);
 welcome.register(bot);
 intro.register(bot);
 gatekeeper.register(bot);
+security.register(bot);
 
 db.initialize();
 
 // Load saved chat IDs from DB (set via /setgroup and /setintro).
 // Env vars take precedence — DB values are the fallback.
-if (!config.getMainGroupId()) {
-  const saved = db.getSetting('MAIN_GROUP_ID');
+function loadIntegerSetting(key, getter, setter) {
+  if (getter()) return;
+  const saved = db.getSetting(key);
   const parsed = Number(saved);
-  if (saved && Number.isFinite(parsed) && Number.isInteger(parsed)) {
-    config.setMainGroupId(parsed);
-  }
+  if (saved && Number.isInteger(parsed) && parsed !== 0) setter(parsed);
 }
-if (!config.getIntroChannelId()) {
-  const saved = db.getSetting('INTRO_CHANNEL_ID');
-  const parsed = Number(saved);
-  if (saved && Number.isFinite(parsed) && Number.isInteger(parsed)) {
-    config.setIntroChannelId(parsed);
-  }
-}
-if (!config.getIntroTopicId()) {
-  const saved = db.getSetting('INTRO_TOPIC_ID');
-  const parsed = Number(saved);
-  if (saved && parsed > 0 && Number.isInteger(parsed)) {
-    config.setIntroTopicId(parsed);
-  }
-}
+
+loadIntegerSetting('MAIN_GROUP_ID',    config.getMainGroupId,    config.setMainGroupId);
+loadIntegerSetting('INTRO_CHANNEL_ID', config.getIntroChannelId, config.setIntroChannelId);
+loadIntegerSetting('INTRO_TOPIC_ID',   config.getIntroTopicId,   config.setIntroTopicId);
 
 bot.launch();
 console.log('Bot started');

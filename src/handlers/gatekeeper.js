@@ -56,7 +56,10 @@ function register(bot) {
   bot.on('edited_message', async (ctx, next) => {
     const mainGroupId = config.getMainGroupId();
 
+    // Unlike the message handler, we call next() when unconfigured — there are no
+    // downstream handlers for edited_message that need to be blocked.
     if (!mainGroupId || shouldBypassGatekeeper(ctx, mainGroupId)) return next();
+    if (isServiceMessage(ctx.message)) return next();
     if (await isUserIntroduced(ctx, mainGroupId)) return next();
 
     logError(ctx.deleteMessage(), 'Failed to delete edited message from non-introduced user');

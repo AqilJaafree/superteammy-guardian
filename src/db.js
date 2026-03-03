@@ -122,7 +122,7 @@ function markIntroduced(userId, msgId) {
       intro_msg_id = ?,
       updated_at = datetime('now')
     WHERE user_id = ?
-  `).run(msgId || null, userId);
+  `).run(msgId ?? null, userId);
 }
 
 function setWelcomeMsgId(userId, msgId) {
@@ -130,7 +130,7 @@ function setWelcomeMsgId(userId, msgId) {
   if (msgId != null) assertSafeInteger(msgId, 'msgId');
   db.prepare(`
     UPDATE users SET welcome_msg_id = ?, updated_at = datetime('now') WHERE user_id = ?
-  `).run(msgId || null, userId);
+  `).run(msgId ?? null, userId);
 }
 
 function resetUser(userId) {
@@ -162,4 +162,16 @@ function close() {
   }
 }
 
-module.exports = { initialize, getUser, getUserByUsername, upsertUser, markIntroduced, setWelcomeMsgId, resetUser, getPending, getSetting, setSetting, close };
+module.exports = {
+  initialize,
+  getUser,
+  getUserByUsername,
+  upsertUser,
+  markIntroduced,
+  setWelcomeMsgId,
+  resetUser,
+  getPending,
+  getSetting,
+  setSetting,
+  close,
+};
