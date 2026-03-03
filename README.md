@@ -27,6 +27,12 @@ Telegram onboarding bot for Superteam Malaysia. New members must introduce thems
       <sub>Member posts a valid intro and the bot <b>accepts it</b> — they can now chat freely in the main group</sub>
     </td>
   </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/warning-link.jpg" alt="Suspicious link warning" width="320" /><br/>
+      <sub>Bot <b>deletes the message</b> and warns the sender when a suspicious link is detected in the main group</sub>
+    </td>
+  </tr>
 </table>
 
 ## Quick Start
