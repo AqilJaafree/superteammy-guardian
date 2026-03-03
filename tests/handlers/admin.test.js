@@ -215,6 +215,15 @@ describe('/reset', () => {
     await bot.getCommand('reset')(ctx);
     expect(db.resetUser).not.toHaveBeenCalled();
   });
+
+  test('replies with a specific error when @username is not in the database', async () => {
+    db.getUserByUsername.mockReturnValue(null);
+    const ctx = makeCtx({ text: '/reset @unknownuser' });
+    await bot.getCommand('reset')(ctx);
+    expect(db.resetUser).not.toHaveBeenCalled();
+    expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining('@unknownuser'));
+    expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining('numeric user ID'));
+  });
 });
 
 // ---- /status ----

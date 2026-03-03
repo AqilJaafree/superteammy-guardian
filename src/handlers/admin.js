@@ -65,7 +65,7 @@ function resolveTarget(ctx) {
     // Support /command @username
     if (arg.startsWith('@')) {
       const user = db.getUserByUsername(arg.slice(1));
-      if (!user) return null;
+      if (!user) return { error: `User ${arg} not found in the database. Try using their numeric user ID instead.` };
       return { id: user.user_id, mention: getMention(user) };
     }
 
@@ -159,9 +159,8 @@ function register(bot) {
 
   bot.command('approve', requireMainGroupAdmin((ctx) => {
     const target = resolveTarget(ctx);
-    if (!target) {
-      return ephemeralReply(ctx, ERRORS.USAGE_APPROVE);
-    }
+    if (!target) return ephemeralReply(ctx, ERRORS.USAGE_APPROVE);
+    if (target.error) return ephemeralReply(ctx, target.error);
 
     if (!db.getUser(target.id)) {
       db.upsertUser(target.id, null, null);
@@ -173,9 +172,8 @@ function register(bot) {
 
   bot.command('reset', requireMainGroupAdmin((ctx) => {
     const target = resolveTarget(ctx);
-    if (!target) {
-      return ephemeralReply(ctx, ERRORS.USAGE_RESET);
-    }
+    if (!target) return ephemeralReply(ctx, ERRORS.USAGE_RESET);
+    if (target.error) return ephemeralReply(ctx, target.error);
 
     const user = db.getUser(target.id);
     if (!user) {
@@ -188,9 +186,8 @@ function register(bot) {
 
   bot.command('status', requireMainGroupAdmin((ctx) => {
     const target = resolveTarget(ctx);
-    if (!target) {
-      return ephemeralReply(ctx, ERRORS.USAGE_STATUS);
-    }
+    if (!target) return ephemeralReply(ctx, ERRORS.USAGE_STATUS);
+    if (target.error) return ephemeralReply(ctx, target.error);
 
     const user = db.getUser(target.id);
     if (!user) {
