@@ -10,6 +10,21 @@ Telegram onboarding bot for Superteam Malaysia. New members must introduce thems
 4. **Group admins** can manually approve, reset, or check user status via commands
 5. **Any message containing a suspicious link** (URL shorteners, bare IP addresses, IDN homograph domains, or Telegram invite links) in the main group is **deleted** and the sender receives a warning — admins are exempt
 
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/intro-message.jpg" alt="Welcome message and gatekeeper reminder" width="320" /><br/>
+      <sub><b>Welcome message</b> sent when a new member joins, and the <b>gatekeeper reminder</b> when they try to post before introducing themselves</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/example-intro.jpg" alt="Intro accepted" width="320" /><br/>
+      <sub>Member posts a valid intro and the bot <b>accepts it</b> — they can now chat freely in the main group</sub>
+    </td>
+  </tr>
+</table>
+
 ## Quick Start
 
 ### 1. Create a Bot
@@ -131,4 +146,4 @@ tests/
 | `INTRO_CHANNEL_ID` | No | Intro channel chat ID (or use `/setintro`) |
 | `DB_PATH` | No | SQLite file path (default: `./data/bot.sqlite`) |
 
-See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for detailed usage instructions covering every user flow.
+See [GUIDE.md](GUIDE.md) for detailed usage instructions covering every user flow.

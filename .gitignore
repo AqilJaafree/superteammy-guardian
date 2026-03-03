@@ -64,7 +64,6 @@ build/
 .claude-plugins/
 
 # ---- Temporary files ----
-docs/
 temp/
 tmp/
 ARCHITECTURE.md
